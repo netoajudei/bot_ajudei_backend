@@ -30,7 +30,7 @@ serve(async (req)=>{
     const openAiApiKey = apiKeyData.openai_api_key;
     // --- 3. GERAÇÃO DO LINK DINÂMICO ---
     const cliente_uuid = compelition.clientes.uuid_identificador;
-    const linkReserva = `https://ajudei.app/reserva/${cliente_uuid}`; // URL atualizado
+    const linkReserva = `https://www.ajudei.app/reserva/${cliente_uuid}`; // URL atualizado
     if (isDebugMode) console.warn("... Link de reserva dinâmico gerado:", linkReserva);
     // --- 4. PREPARAÇÃO DA CHAMADA PARA OPENAI COM A VARIÁVEL ---
     const dataAtual = new Date().toLocaleString('pt-BR', {
@@ -50,7 +50,7 @@ serve(async (req)=>{
       ...compelition.chat || []
     ];
     const openAiPayload = {
-      model: promptData.modelo_ia || "gpt-4o-mini",
+      model: promptData.modelo_ia || "gpt-4.1-mini",
       messages,
       tools: (promptData.tools || []).map((t)=>({
           type: 'function',

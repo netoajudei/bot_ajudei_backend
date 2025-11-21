@@ -300,6 +300,398 @@ $$;
 ALTER FUNCTION "public"."append_to_compelition_chat"("p_cliente_id" bigint, "p_new_message" "jsonb") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."atribuir_mesa_e_notificar_cliente"("p_reserva_id" bigint, "p_numero_mesa" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_reserva         RECORD;
+    v_mensagem        text;
+    v_http_response   RECORD;
+    v_edge_function_url text;
+BEGIN
+    -- ========================================================================
+    -- ETAPA 1: Validação dos parâmetros de entrada
+    -- ========================================================================
+    IF p_reserva_id IS NULL THEN
+        RETURN jsonb_build_object(
+            'success', false,
+            'message', 'ID da reserva é obrigatório',
+            'error', 'MISSING_RESERVA_ID'
+        );
+    END IF;
+
+    IF p_numero_mesa IS NULL OR TRIM(p_numero_mesa) = '' THEN
+        RETURN jsonb_build_object(
+            'success', false,
+            'message', 'Número da mesa é obrigatório',
+            'error', 'MISSING_MESA_NUMBER'
+        );
+    END IF;
+
+    -- ========================================================================
+    -- ETAPA 2: Buscar informações da reserva
+    -- ========================================================================
+    SELECT 
+        r.id,
+        r.chat_id,
+        r.nome,
+        r.empresa_id,
+        r.instancia,
+        r.data_reserva,
+        r.horario,
+        r.cancelada_cliente,
+        r.cancelada_casa,
+        r.confirmada
+    INTO v_reserva
+    FROM public.reservas r
+    WHERE r.id = p_reserva_id;
+
+    -- Verificar se a reserva existe
+    IF NOT FOUND THEN
+        RETURN jsonb_build_object(
+            'success', false,
+            'message', 'Reserva não encontrada',
+            'error', 'RESERVA_NOT_FOUND',
+            'reserva_id', p_reserva_id
+        );
+    END IF;
+
+    -- Validar status da reserva
+    IF v_reserva.cancelada_cliente = true THEN
+        RETURN jsonb_build_object(
+            'success', false,
+            'message', 'A reserva foi cancelada pelo cliente',
+            'error', 'RESERVA_CANCELADA_CLIENTE',
+            'reserva_id', p_reserva_id
+        );
+    END IF;
+
+    IF v_reserva.cancelada_casa = true THEN
+        RETURN jsonb_build_object(
+            'success', false,
+            'message', 'A reserva foi cancelada pela casa',
+            'error', 'RESERVA_CANCELADA_CASA',
+            'reserva_id', p_reserva_id
+        );
+    END IF;
+
+    -- Verificar se o chat_id existe
+    IF v_reserva.chat_id IS NULL OR TRIM(v_reserva.chat_id) = '' THEN
+        RETURN jsonb_build_object(
+            'success', false,
+            'message', 'Reserva não possui chat_id associado (pode ser reserva anônima)',
+            'error', 'MISSING_CHAT_ID',
+            'reserva_id', p_reserva_id
+        );
+    END IF;
+
+    -- ========================================================================
+    -- ETAPA 4: Atualizar a reserva com o número da mesa
+    -- ========================================================================
+    UPDATE public.reservas
+    SET mesa = p_numero_mesa
+    WHERE id = p_reserva_id;
+
+    RAISE NOTICE '✅ Mesa % atribuída à reserva ID %', p_numero_mesa, p_reserva_id;
+
+    -- ========================================================================
+    -- ETAPA 5: Preparar e enviar mensagem via WhatsApp
+    -- ========================================================================
+    
+    -- Verificar se temos cliente_id
+    IF v_reserva.clientes_id IS NULL THEN
+        RETURN jsonb_build_object(
+            'success', false,
+            'message', 'Reserva não possui cliente_id associado',
+            'error', 'MISSING_CLIENTE_ID',
+            'reserva_id', p_reserva_id
+        );
+    END IF;
+
+    -- Construir a mensagem personalizada
+    v_mensagem := format(
+        E'Olá%s! 🎉\n\nTudo está pronto por aqui e estamos ansiosos em vê-lo(a) em nossa casa! ' ||
+        'Sua mesa já está reservada.\n\n📍 *Mesa: %s*\n\n' ||
+        'Até breve! ✨',
+        CASE 
+            WHEN v_reserva.nome IS NOT NULL AND TRIM(v_reserva.nome) != '' 
+            THEN ', ' || TRIM(v_reserva.nome)
+            ELSE ''
+        END,
+        p_numero_mesa
+    );
+
+    -- URL da Edge Function
+    v_edge_function_url := 'https://ctsvfluufyfhkqlonqio.supabase.co/functions/v1/send-whatsapp-gateway';
+
+    -- Fazer a chamada HTTP para a Edge Function
+    BEGIN
+        SELECT status, content::jsonb
+        INTO v_http_response
+        FROM extensions.http((
+            'POST',
+            v_edge_function_url,
+            ARRAY[
+                extensions.http_header('Content-Type', 'application/json'),
+                extensions.http_header('Authorization', 'Bearer ' || current_setting('request.headers')::json->>'authorization')
+            ],
+            'application/json',
+            jsonb_build_object(
+                'cliente_id', v_reserva.clientes_id,
+                'message', v_mensagem
+            )::text
+        ));
+
+        -- Verificar resposta da Edge Function
+        IF v_http_response.status >= 200 AND v_http_response.status < 300 THEN
+            RAISE NOTICE '📱 Mensagem enviada com sucesso para cliente_id %', v_reserva.clientes_id;
+            
+            RETURN jsonb_build_object(
+                'success', true,
+                'message', 'Mesa atribuída e cliente notificado com sucesso',
+                'reserva_id', p_reserva_id,
+                'mesa', p_numero_mesa,
+                'cliente', v_reserva.nome,
+                'cliente_id', v_reserva.clientes_id,
+                'whatsapp_response', v_http_response.content
+            );
+        ELSE
+            RAISE WARNING '⚠️ Erro ao enviar mensagem: Status %', v_http_response.status;
+            
+            RETURN jsonb_build_object(
+                'success', false,
+                'message', 'Mesa atribuída, mas houve erro ao enviar mensagem no WhatsApp',
+                'reserva_id', p_reserva_id,
+                'mesa', p_numero_mesa,
+                'error', 'WHATSAPP_SEND_ERROR',
+                'http_status', v_http_response.status,
+                'response', v_http_response.content
+            );
+        END IF;
+
+    EXCEPTION WHEN OTHERS THEN
+        -- Capturar erros na chamada HTTP
+        RAISE WARNING '❌ Exceção ao chamar Edge Function: % - %', SQLERRM, SQLSTATE;
+        
+        RETURN jsonb_build_object(
+            'success', false,
+            'message', 'Mesa atribuída, mas houve exceção ao tentar enviar mensagem',
+            'reserva_id', p_reserva_id,
+            'mesa', p_numero_mesa,
+            'error', 'EDGE_FUNCTION_EXCEPTION',
+            'error_message', SQLERRM,
+            'error_state', SQLSTATE
+        );
+    END;
+
+END;
+$$;
+
+
+ALTER FUNCTION "public"."atribuir_mesa_e_notificar_cliente"("p_reserva_id" bigint, "p_numero_mesa" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."atribuir_mesa_e_notificar_cliente"("p_reserva_id" bigint, "p_numero_mesa" "text") IS 'Atribui uma mesa a uma reserva e notifica o cliente via WhatsApp através da Edge Function send_whats_wame.';
+
+
+
+CREATE OR REPLACE FUNCTION "public"."atualizar_limite_periodo"("p_empresa_id" bigint, "p_nome_periodo" "text", "p_limite_maximo" integer) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_empresa_existe BOOLEAN;
+    v_regras_existem BOOLEAN;
+    v_json_atual JSONB;
+    v_json_atualizado JSONB;
+    v_elemento JSONB;
+    v_encontrou BOOLEAN := FALSE;
+BEGIN
+    RAISE WARNING '🚀 [INÍCIO] atualizar_limite_periodo';
+    RAISE WARNING '📥 [INPUT] Empresa: %, Período: "%", Limite Máximo: %', 
+        p_empresa_id, p_nome_periodo, p_limite_maximo;
+
+    -- ========== VALIDAÇÃO 1: EMPRESA EXISTE? ==========
+    SELECT EXISTS(
+        SELECT 1 FROM public.empresa 
+        WHERE id = p_empresa_id
+    ) INTO v_empresa_existe;
+
+    IF NOT v_empresa_existe THEN
+        RAISE WARNING '❌ [VALIDAÇÃO] Empresa ID % não encontrada', p_empresa_id;
+        RETURN jsonb_build_object(
+            'success', false,
+            'error', format('Empresa com ID %s não encontrada no sistema.', p_empresa_id)
+        );
+    END IF;
+
+    RAISE WARNING '✅ [VALIDAÇÃO] Empresa existe';
+
+    -- ========== VALIDAÇÃO 2: LIMITE MÁXIMO ==========
+    IF p_limite_maximo < 1 THEN
+        RAISE WARNING '❌ [VALIDAÇÃO] Limite máximo inválido: %', p_limite_maximo;
+        RETURN jsonb_build_object(
+            'success', false,
+            'error', 'O limite máximo deve ser maior ou igual a 1.'
+        );
+    END IF;
+
+    -- ========== VALIDAÇÃO 3: NOME DO PERÍODO ==========
+    IF TRIM(p_nome_periodo) = '' THEN
+        RAISE WARNING '❌ [VALIDAÇÃO] Nome do período vazio';
+        RETURN jsonb_build_object(
+            'success', false,
+            'error', 'O nome do período não pode estar vazio.'
+        );
+    END IF;
+
+    RAISE WARNING '✅ [VALIDAÇÃO] Parâmetros válidos';
+
+    -- ========== VERIFICAR SE EXISTE REGISTRO DE REGRAS ==========
+    SELECT EXISTS(
+        SELECT 1 FROM public.regras_de_reserva 
+        WHERE empresa_id = p_empresa_id
+    ) INTO v_regras_existem;
+
+    IF NOT v_regras_existem THEN
+        -- ========== CASO 1: NÃO EXISTE - CRIAR NOVO ==========
+        RAISE WARNING '➕ [CASO 1] Nenhuma regra existe. Criando novo registro...';
+        
+        INSERT INTO public.regras_de_reserva (
+            empresa_id,
+            limites_por_periodo
+        ) VALUES (
+            p_empresa_id,
+            jsonb_build_array(
+                jsonb_build_object(
+                    'nome_periodo', p_nome_periodo,
+                    'limite_convidados', p_limite_maximo
+                )
+            )
+        );
+
+        RAISE WARNING '✅ [CASO 1] Registro criado com sucesso';
+        
+        RETURN jsonb_build_object(
+            'success', true,
+            'action', 'created',
+            'message', format('Regras criadas para o período "%s" com limite de %s pessoas', 
+                p_nome_periodo, p_limite_maximo),
+            'data', jsonb_build_object(
+                'empresa_id', p_empresa_id,
+                'nome_periodo', p_nome_periodo,
+                'limite_convidados', p_limite_maximo
+            )
+        );
+    END IF;
+
+    -- ========== CASO 2: EXISTE - ATUALIZAR ==========
+    RAISE WARNING '🔄 [CASO 2] Regras existem. Atualizando...';
+
+    -- Busca o JSON atual
+    SELECT limites_por_periodo INTO v_json_atual
+    FROM public.regras_de_reserva
+    WHERE empresa_id = p_empresa_id;
+
+    RAISE WARNING '📊 [CASO 2] JSON atual: %', v_json_atual;
+
+    -- Se o JSON for NULL, inicializa como array vazio
+    IF v_json_atual IS NULL THEN
+        v_json_atual := '[]'::jsonb;
+        RAISE WARNING '⚠️ [CASO 2] JSON era NULL, inicializado como []';
+    END IF;
+
+    -- ========== PROCESSA O JSON - UPSERT NO ARRAY ==========
+    v_json_atualizado := '[]'::jsonb;
+    v_encontrou := FALSE;
+
+    RAISE WARNING '🔍 [CASO 2] Procurando período "%s" no array...', p_nome_periodo;
+
+    -- Loop por todos os elementos do array
+    FOR v_elemento IN SELECT * FROM jsonb_array_elements(v_json_atual)
+    LOOP
+        IF (v_elemento->>'nome_periodo') = p_nome_periodo THEN
+            -- Encontrou! Atualiza este elemento
+            v_encontrou := TRUE;
+            
+            RAISE WARNING '🎯 [CASO 2] Período encontrado! Atualizando...';
+            RAISE WARNING '   Valor antigo: %', v_elemento->>'limite_convidados';
+            RAISE WARNING '   Valor novo: %', p_limite_maximo;
+            
+            -- Adiciona o elemento atualizado
+            v_json_atualizado := v_json_atualizado || jsonb_build_array(
+                jsonb_build_object(
+                    'nome_periodo', p_nome_periodo,
+                    'limite_convidados', p_limite_maximo
+                )
+            );
+        ELSE
+            -- Não é o período buscado, mantém como está
+            v_json_atualizado := v_json_atualizado || jsonb_build_array(v_elemento);
+        END IF;
+    END LOOP;
+
+    -- Se não encontrou, adiciona como novo
+    IF NOT v_encontrou THEN
+        RAISE WARNING '➕ [CASO 2] Período não encontrado no array. Adicionando...';
+        
+        v_json_atualizado := v_json_atualizado || jsonb_build_array(
+            jsonb_build_object(
+                'nome_periodo', p_nome_periodo,
+                'limite_convidados', p_limite_maximo
+            )
+        );
+    END IF;
+
+    RAISE WARNING '📊 [CASO 2] JSON atualizado: %', v_json_atualizado;
+
+    -- ========== ATUALIZA NO BANCO ==========
+    UPDATE public.regras_de_reserva
+    SET limites_por_periodo = v_json_atualizado
+    WHERE empresa_id = p_empresa_id;
+
+    RAISE WARNING '✅ [CASO 2] Atualização concluída com sucesso';
+
+    -- ========== RETORNO DE SUCESSO ==========
+    RETURN jsonb_build_object(
+        'success', true,
+        'action', CASE WHEN v_encontrou THEN 'updated' ELSE 'inserted' END,
+        'message', CASE 
+            WHEN v_encontrou THEN format('Período "%s" atualizado para %s pessoas', p_nome_periodo, p_limite_maximo)
+            ELSE format('Período "%s" adicionado com limite de %s pessoas', p_nome_periodo, p_limite_maximo)
+        END,
+        'data', jsonb_build_object(
+            'empresa_id', p_empresa_id,
+            'nome_periodo', p_nome_periodo,
+            'limite_convidados', p_limite_maximo,
+            'todos_periodos', v_json_atualizado
+        )
+    );
+
+EXCEPTION
+    WHEN foreign_key_violation THEN
+        RAISE WARNING '🔥 [ERRO] Violação de chave estrangeira';
+        RETURN jsonb_build_object(
+            'success', false,
+            'error', format('Empresa com ID %s não existe no sistema.', p_empresa_id)
+        );
+    WHEN OTHERS THEN
+        RAISE WARNING '🔥 [ERRO] %', SQLERRM;
+        RETURN jsonb_build_object(
+            'success', false,
+            'error', SQLERRM
+        );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."atualizar_limite_periodo"("p_empresa_id" bigint, "p_nome_periodo" "text", "p_limite_maximo" integer) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."atualizar_limite_periodo"("p_empresa_id" bigint, "p_nome_periodo" "text", "p_limite_maximo" integer) IS 'Insere ou atualiza (UPSERT) o limite máximo de capacidade de um período específico.
+Versão simplificada - apenas 3 parâmetros: empresa_id, nome_periodo, limite_maximo.';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."atualizar_prompt_completo"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     AS $$BEGIN
@@ -1487,6 +1879,37 @@ $$;
 ALTER FUNCTION "public"."marcar_reserva_como_confirmada"("p_cliente_id" bigint) OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."nome_da_sua_funcao"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+    -- Só executa a lógica se a operação for um UPDATE.
+    IF TG_OP = 'UPDATE' THEN
+        -- Verifica se as colunas protegidas 'empresa_id' ou 'instancia' foram alteradas.
+        -- "IS DISTINCT FROM" lida corretamente com valores nulos.
+        IF NEW.empresa_id IS DISTINCT FROM OLD.empresa_id OR
+           NEW.instancia IS DISTINCT FROM OLD.instancia
+           -- A verificação do "chatId" foi REMOVIDA daqui.
+        THEN
+            -- Se uma coluna protegida foi alterada, verifica se o usuário tem o nível 'dev'.
+            -- Apenas um 'dev' pode fazer este tipo de alteração crítica.
+            IF NOT public.usuario_tem_permissao_de('dev') THEN
+                -- Atualiza a mensagem de erro para refletir as colunas que ainda estão protegidas.
+                RAISE EXCEPTION 'Permissão negada: As colunas empresa_id e instancia não podem ser alteradas.';
+            END IF;
+        END IF;
+    END IF;
+
+    -- Se todas as verificações passarem (ou se apenas o chatId foi alterado), 
+    -- permite que o UPDATE continue.
+    RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."nome_da_sua_funcao"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."processar_cliente_especifico"("p_cliente_id" integer) RETURNS "text"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -2131,96 +2554,220 @@ DECLARE
     v_periodo_funcionamento RECORD;
     v_total_convidados_no_periodo INT;
     v_limite_do_periodo INT;
+    v_dia_semana INT;
+    v_resumo_periodo RECORD;
 BEGIN
-    -- Busca o id interno e a empresa_id do cliente a partir do UUID.
+    -- ========== ETAPA 1: BUSCAR CLIENTE ==========
     SELECT id, empresa_id INTO v_cliente_id, v_empresa_id
-    FROM public.clientes WHERE uuid_identificador = p_cliente_uuid;
+    FROM public.clientes 
+    WHERE uuid_identificador = p_cliente_uuid;
     
     IF NOT FOUND THEN
         RETURN jsonb_build_object('disponivel', false, 'motivo', 'Cliente não encontrado.');
     END IF;
 
-    -- Busca as regras de negócio gerais para a empresa.
-    SELECT * INTO v_regras FROM public.regras_de_reserva WHERE empresa_id = v_empresa_id;
+    RAISE WARNING '✅ [ETAPA 1] Cliente ID: %, Empresa ID: %', v_cliente_id, v_empresa_id;
+
+    -- ========== ETAPA 2: BUSCAR REGRAS ==========
+    SELECT * INTO v_regras 
+    FROM public.regras_de_reserva 
+    WHERE empresa_id = v_empresa_id;
+    
     IF NOT FOUND THEN 
-        -- Se não houver regras, assume um padrão seguro e permite a continuação.
-        RETURN jsonb_build_object('disponivel', true, 'empresa_id', v_empresa_id, 'min_convidados_reserva', 1, 'max_convidados_reserva', 50); 
+        RAISE WARNING '⚠️ [ETAPA 2] Nenhuma regra encontrada';
+        RETURN jsonb_build_object(
+            'disponivel', true, 
+            'empresa_id', v_empresa_id, 
+            'min_convidados_reserva', 1, 
+            'max_convidados_reserva', 50
+        ); 
     END IF;
 
-    -- VALIDAÇÃO 1: Limite de Pessoas por Reserva
-    IF p_numero_de_pessoas < v_regras.limite_minimo_pessoas_reserva OR p_numero_de_pessoas > v_regras.limite_maximo_pessoas_reserva THEN
-        RETURN jsonb_build_object('disponivel', false, 'motivo', 'O número de convidados para uma única reserva deve ser entre ' || v_regras.limite_minimo_pessoas_reserva || ' e ' || v_regras.limite_maximo_pessoas_reserva || '.');
+    RAISE WARNING '✅ [ETAPA 2] Regras carregadas';
+
+    -- ========== VALIDAÇÃO 1: LIMITE DE PESSOAS ==========
+    IF p_numero_de_pessoas < v_regras.limite_minimo_pessoas_reserva OR 
+       p_numero_de_pessoas > v_regras.limite_maximo_pessoas_reserva THEN
+        
+        RAISE WARNING '❌ [VALIDAÇÃO 1] Fora do limite: % (min: %, max: %)', 
+            p_numero_de_pessoas,
+            v_regras.limite_minimo_pessoas_reserva,
+            v_regras.limite_maximo_pessoas_reserva;
+        
+        RETURN jsonb_build_object(
+            'disponivel', false, 
+            'motivo', format('O número de convidados deve ser entre %s e %s.', 
+                v_regras.limite_minimo_pessoas_reserva, 
+                v_regras.limite_maximo_pessoas_reserva)
+        );
     END IF;
 
-    -- VALIDAÇÃO 2: Horário Limite
-    IF p_data_desejada = CURRENT_DATE AND v_regras.horario_limite_reserva_mesmo_dia IS NOT NULL THEN
+    RAISE WARNING '✅ [VALIDAÇÃO 1] Número de pessoas OK';
+
+    -- ========== VALIDAÇÃO 2: HORÁRIO LIMITE ==========
+    IF p_data_desejada = CURRENT_DATE AND 
+       v_regras.horario_limite_reserva_mesmo_dia IS NOT NULL THEN
+        
         IF (NOW() AT TIME ZONE 'America/Sao_Paulo')::time > v_regras.horario_limite_reserva_mesmo_dia THEN
-            RETURN jsonb_build_object('disponivel', false, 'motivo', 'O horário para novas reservas hoje já encerrou.');
+            RAISE WARNING '❌ [VALIDAÇÃO 2] Horário limite ultrapassado';
+            RETURN jsonb_build_object('disponivel', false, 'motivo', 'Para hoje nosso horário limite para novas reservas já se encerrou. Agora somente por ordem de chegada.');
         END IF;
     END IF;
 
-    -- VALIDAÇÃO 3: Funcionamento da Casa
-    -- *** CORREÇÃO APLICADA AQUI: Usa to_char com 'D' para o padrão Domingo=1 ***
+    RAISE WARNING '✅ [VALIDAÇÃO 2] Horário OK';
+
+    -- ========== VALIDAÇÃO 3: FUNCIONAMENTO ==========
+    v_dia_semana := CAST(to_char(p_data_desejada, 'D') AS INTEGER);
+    
     SELECT * INTO v_periodo_funcionamento 
     FROM public.periodos_funcionamento 
     WHERE empresa_id = v_empresa_id 
-      AND dia_semana = CAST(to_char(p_data_desejada, 'D') AS INTEGER)
+      AND dia_semana = v_dia_semana
       AND nome_periodo = p_nome_periodo 
       AND ativo = true;
+    
     IF NOT FOUND THEN
-        RETURN jsonb_build_object('disponivel', false, 'motivo', 'Lamentamos, mas não abrimos neste dia e período.');
+        RAISE WARNING '❌ [VALIDAÇÃO 3] Casa não abre neste dia/período';
+        RETURN jsonb_build_object('disponivel', false, 'motivo', 'Não abrimos neste dia ou nesse período que você escolheu. Por favor consulte nosso horários de funcionamento pelo whatsapp.');
     END IF;
 
-    -- VALIDAÇÃO 4: Regras Gerais (Dia da Semana)
-    -- *** CORREÇÃO APLICADA AQUI: Usa to_char com 'D' para o padrão Domingo=1 ***
-    IF CAST(to_char(p_data_desejada, 'D') AS INTEGER) = ANY(COALESCE(v_regras.dias_semana_indisponiveis, '{}')) THEN
-        RETURN jsonb_build_object('disponivel', false, 'motivo', 'Não aceitamos reservas para este dia da semana.');
+    RAISE WARNING '✅ [VALIDAÇÃO 3] Funcionamento OK';
+
+    -- ========== VALIDAÇÃO 4: DIAS BLOQUEADOS ==========
+    IF v_dia_semana = ANY(COALESCE(v_regras.dias_semana_indisponiveis, '{}')) THEN
+        RAISE WARNING '❌ [VALIDAÇÃO 4] Dia da semana bloqueado';
+        RETURN jsonb_build_object('disponivel', false, 'motivo', 'Não pegamos reservas nesse dia da semana.');
     END IF;
 
-    -- VALIDAÇÃO 5: Exceções e Definição do Limite do Dia
-    SELECT * INTO v_excecao FROM public.datas_excecao_reserva WHERE empresa_id = v_empresa_id AND data_excecao = p_data_desejada AND nome_periodo = p_nome_periodo;
+    RAISE WARNING '✅ [VALIDAÇÃO 4] Dia não bloqueado';
+
+    -- ========== VALIDAÇÃO 5: EXCEÇÕES E LIMITE ==========
+    SELECT * INTO v_excecao 
+    FROM public.datas_excecao_reserva 
+    WHERE empresa_id = v_empresa_id 
+      AND data_excecao = p_data_desejada 
+      AND nome_periodo = p_nome_periodo;
+    
     IF FOUND THEN
+        RAISE WARNING '🔍 [VALIDAÇÃO 5] Exceção encontrada - Limite: %', v_excecao.limite_maximo_convidados;
+        
         IF v_excecao.limite_maximo_convidados = 0 THEN
-            RETURN jsonb_build_object('disponivel', false, 'motivo', 'As reservas para esta data e período estão temporariamente suspensas.');
+            RAISE WARNING '❌ [VALIDAÇÃO 5] Data bloqueada (limite 0)';
+            RETURN jsonb_build_object('disponivel', false, 'motivo', 'Data bloqueada.');
         END IF;
+        
         v_limite_do_periodo := v_excecao.limite_maximo_convidados;
     ELSE
+        RAISE WARNING '🔍 [VALIDAÇÃO 5] Sem exceção. Buscando no JSON...';
+        
+        -- Busca no JSON
         SELECT (elem->>'limite_convidados')::int INTO v_limite_do_periodo
         FROM jsonb_array_elements(v_regras.limites_por_periodo) elem
         WHERE elem->>'nome_periodo' = p_nome_periodo;
         
         IF v_limite_do_periodo IS NULL THEN
-            RETURN jsonb_build_object('disponivel', false, 'motivo', 'Não há um limite de capacidade definido para este período.');
+            RAISE WARNING '❌ [VALIDAÇÃO 5] Período "%s" não configurado no JSON', p_nome_periodo;
+            RETURN jsonb_build_object(
+                'disponivel', false, 
+                'motivo', format('Período "%s" não configurado.', p_nome_periodo)
+            );
         END IF;
+        
+        RAISE WARNING '✅ [VALIDAÇÃO 5] Limite do JSON: %', v_limite_do_periodo;
     END IF;
 
-    -- VALIDAÇÃO 6: Capacidade do Período
-    SELECT SUM(r.adultos + COALESCE(r.criancas, 0)) INTO v_total_convidados_no_periodo
-    FROM public.reservas r
-    WHERE r.empresa_id = v_empresa_id 
-      AND r.data_reserva = p_data_desejada 
-      AND r.horario = p_nome_periodo
-      AND r.cancelada_casa = false
-      AND r.cancelada_cliente = false;
-      
-    v_total_convidados_no_periodo := COALESCE(v_total_convidados_no_periodo, 0);
-
+    -- ========================================================================
+    -- ========== VALIDAÇÃO 6: CAPACIDADE (USANDO A VIEW) ===================
+    -- ========================================================================
+    
+    RAISE WARNING '🔍 [VALIDAÇÃO 6] =====================================';
+    RAISE WARNING '🔍 [VALIDAÇÃO 6] Buscando na VIEW resumo_reservas_diarias';
+    RAISE WARNING '🔍 [VALIDAÇÃO 6] Empresa: %', v_empresa_id;
+    RAISE WARNING '🔍 [VALIDAÇÃO 6] Data: %', p_data_desejada;
+    RAISE WARNING '🔍 [VALIDAÇÃO 6] Período: "%"', p_nome_periodo;
+    
+    -- *** SOLUÇÃO: Usar a view que já funciona ***
+    SELECT * INTO v_resumo_periodo
+    FROM public.resumo_reservas_diarias
+    WHERE empresa_id = v_empresa_id
+      AND date = p_data_desejada
+      AND periodo = p_nome_periodo;
+    
+    IF FOUND THEN
+        -- Extrai o número de pessoas do formato "170 pessoas"
+        v_total_convidados_no_periodo := CAST(
+            SPLIT_PART(v_resumo_periodo.total_de_convidados, ' ', 1) AS INT
+        );
+        
+        RAISE WARNING '✅ [VALIDAÇÃO 6] Dados encontrados na view!';
+        RAISE WARNING '🔍 [VALIDAÇÃO 6] Total de convidados: %', v_total_convidados_no_periodo;
+        RAISE WARNING '🔍 [VALIDAÇÃO 6] Total de reservas: %', v_resumo_periodo.total_de_reservas;
+    ELSE
+        -- Nenhuma reserva para este período ainda
+        v_total_convidados_no_periodo := 0;
+        RAISE WARNING '🔍 [VALIDAÇÃO 6] Nenhuma reserva encontrada (período vazio)';
+    END IF;
+    
+    RAISE WARNING '🔍 [VALIDAÇÃO 6] -------------------------------------';
+    RAISE WARNING '🔍 [VALIDAÇÃO 6] 📊 Ocupação atual: %', v_total_convidados_no_periodo;
+    RAISE WARNING '🔍 [VALIDAÇÃO 6] 📊 Limite do período: %', v_limite_do_periodo;
+    RAISE WARNING '🔍 [VALIDAÇÃO 6] 📊 Solicitando: %', p_numero_de_pessoas;
+    RAISE WARNING '🔍 [VALIDAÇÃO 6] 📊 Total após reserva: %', v_total_convidados_no_periodo + p_numero_de_pessoas;
+    RAISE WARNING '🔍 [VALIDAÇÃO 6] 📊 Vagas disponíveis: %', v_limite_do_periodo - v_total_convidados_no_periodo;
+    
+    -- VALIDAÇÃO FINAL
     IF (v_total_convidados_no_periodo + p_numero_de_pessoas) > v_limite_do_periodo THEN
-        RETURN jsonb_build_object('disponivel', false, 'motivo', 'Lamentamos, mas nossa capacidade para este período está esgotada.');
+        RAISE WARNING '❌❌❌ [VALIDAÇÃO 6] CAPACIDADE ESGOTADA! ❌❌❌';
+        RAISE WARNING '❌ [VALIDAÇÃO 6] Cálculo: % + % = % > % (limite)', 
+            v_total_convidados_no_periodo,
+            p_numero_de_pessoas,
+            v_total_convidados_no_periodo + p_numero_de_pessoas,
+            v_limite_do_periodo;
+        
+        RETURN jsonb_build_object(
+            'disponivel', false, 
+            'motivo', format('Capacidade esgotada. Já temos %s pessoas confirmadas e o limite é %s. Sobraram apenas %s vagas.Agora somente por ordem de chegada. ', 
+                v_total_convidados_no_periodo, 
+                v_limite_do_periodo,
+                GREATEST(0, v_limite_do_periodo - v_total_convidados_no_periodo)
+            ),
+            'detalhes', jsonb_build_object(
+                'ocupacao_atual', v_total_convidados_no_periodo,
+                'limite_periodo', v_limite_do_periodo,
+                'solicitado', p_numero_de_pessoas,
+                'vagas_disponiveis', GREATEST(0, v_limite_do_periodo - v_total_convidados_no_periodo),
+                'excedente', (v_total_convidados_no_periodo + p_numero_de_pessoas) - v_limite_do_periodo
+            )
+        );
     END IF;
 
-    -- Se passou por todas as validações, a data está disponível.
+    RAISE WARNING '✅✅✅ [VALIDAÇÃO 6] CAPACIDADE OK! ✅✅✅';
+    RAISE WARNING '✅ [VALIDAÇÃO 6] Vagas restantes: %', v_limite_do_periodo - v_total_convidados_no_periodo;
+    RAISE WARNING '🔍 [VALIDAÇÃO 6] =====================================';
+
+    -- ========== SUCESSO ==========
     RETURN jsonb_build_object(
         'disponivel', true,
         'empresa_id', v_empresa_id,
         'min_convidados_reserva', v_regras.limite_minimo_pessoas_reserva,
-        'max_convidados_reserva', v_regras.limite_maximo_pessoas_reserva
+        'max_convidados_reserva', v_regras.limite_maximo_pessoas_reserva,
+        'info', jsonb_build_object(
+            'limite_periodo', v_limite_do_periodo,
+            'ocupacao_atual', v_total_convidados_no_periodo,
+            'vagas_restantes', v_limite_do_periodo - v_total_convidados_no_periodo
+        )
     );
+    
 END;
 $$;
 
 
 ALTER FUNCTION "public"."verificar_disponibilidade"("p_cliente_uuid" "uuid", "p_data_desejada" "date", "p_nome_periodo" "text", "p_numero_de_pessoas" integer) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."verificar_disponibilidade"("p_cliente_uuid" "uuid", "p_data_desejada" "date", "p_nome_periodo" "text", "p_numero_de_pessoas" integer) IS 'Valida disponibilidade usando a view resumo_reservas_diarias para cálculo preciso.
+CORRIGIDO: Agora busca corretamente a ocupação por período.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."verificar_permissao_usuario"("p_user_id" "uuid", "p_role_requerida" "public"."app_role") RETURNS boolean
@@ -2485,7 +3032,7 @@ CREATE TABLE IF NOT EXISTS "public"."reservas" (
     "confirmada_por" "text",
     "chat_id" "text",
     "nome" "text",
-    "instancia" integer,
+    "instancia" bigint,
     "data_reserva" "date" NOT NULL,
     "horario" "text",
     "convidados" integer,
@@ -2844,7 +3391,8 @@ CREATE TABLE IF NOT EXISTS "public"."empresa" (
     "contato_fornecedores" "text"[],
     "contato_teste" "text",
     "api_provider" "public"."api_provider_type" DEFAULT 'wappi'::"public"."api_provider_type" NOT NULL,
-    "modo_ia" "public"."modo_ia_type" DEFAULT 'prompt_unico'::"public"."modo_ia_type" NOT NULL
+    "modo_ia" "public"."modo_ia_type" DEFAULT 'prompt_unico'::"public"."modo_ia_type" NOT NULL,
+    "cor" "text" DEFAULT '#000000'::"text"
 );
 
 
@@ -4047,6 +4595,18 @@ GRANT ALL ON FUNCTION "public"."append_to_compelition_chat"("p_cliente_id" bigin
 
 
 
+GRANT ALL ON FUNCTION "public"."atribuir_mesa_e_notificar_cliente"("p_reserva_id" bigint, "p_numero_mesa" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."atribuir_mesa_e_notificar_cliente"("p_reserva_id" bigint, "p_numero_mesa" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."atribuir_mesa_e_notificar_cliente"("p_reserva_id" bigint, "p_numero_mesa" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."atualizar_limite_periodo"("p_empresa_id" bigint, "p_nome_periodo" "text", "p_limite_maximo" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."atualizar_limite_periodo"("p_empresa_id" bigint, "p_nome_periodo" "text", "p_limite_maximo" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."atualizar_limite_periodo"("p_empresa_id" bigint, "p_nome_periodo" "text", "p_limite_maximo" integer) TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."atualizar_prompt_completo"() TO "anon";
 GRANT ALL ON FUNCTION "public"."atualizar_prompt_completo"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."atualizar_prompt_completo"() TO "service_role";
@@ -4206,6 +4766,12 @@ GRANT ALL ON FUNCTION "public"."limpeza_diaria_sistema"() TO "service_role";
 GRANT ALL ON FUNCTION "public"."marcar_reserva_como_confirmada"("p_cliente_id" bigint) TO "anon";
 GRANT ALL ON FUNCTION "public"."marcar_reserva_como_confirmada"("p_cliente_id" bigint) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."marcar_reserva_como_confirmada"("p_cliente_id" bigint) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."nome_da_sua_funcao"() TO "anon";
+GRANT ALL ON FUNCTION "public"."nome_da_sua_funcao"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."nome_da_sua_funcao"() TO "service_role";
 
 
 
