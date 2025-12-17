@@ -876,6 +876,35 @@ $$;
 ALTER FUNCTION "public"."bloqueio_ia_cliente"("p_cliente_id" bigint, "p_suspender_permanentemente" boolean, "p_reativar" boolean) OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."buscar_contrato"("p_telefone" "text") RETURNS json
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+  RETURN (
+    SELECT json_build_object(
+      'found', true,
+      'contrato', row_to_json(c)
+    )
+    FROM contratos c
+    WHERE c.telefone = p_telefone
+    ORDER BY c.created_at DESC
+    LIMIT 1
+  );
+  
+  -- Se não encontrou
+  IF NOT FOUND THEN
+    RETURN json_build_object(
+      'found', false,
+      'message', 'Nenhum contrato encontrado para este telefone'
+    );
+  END IF;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."buscar_contrato"("p_telefone" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."buscar_reserva_ativa_cliente"("p_cliente_uuid" "uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -2495,6 +2524,138 @@ $$;
 ALTER FUNCTION "public"."update_analytics_aggregates"("p_data_referencia" "date") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."update_updated_at"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."update_updated_at"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."upsert_contrato"("p_telefone" "text", "p_cliente_id" bigint DEFAULT NULL::bigint, "p_nome" "text" DEFAULT NULL::"text", "p_nome_pai" "text" DEFAULT NULL::"text", "p_nome_mae" "text" DEFAULT NULL::"text", "p_numero_contrato" "text" DEFAULT NULL::"text", "p_banco" "text" DEFAULT NULL::"text", "p_parcelas" integer DEFAULT NULL::integer, "p_valor_parcela" numeric DEFAULT NULL::numeric, "p_prazo_contrato" integer DEFAULT NULL::integer, "p_parcelas_pagas" integer DEFAULT NULL::integer, "p_parcelas_em_aberto" integer DEFAULT NULL::integer, "p_parcelas_atrasadas" integer DEFAULT NULL::integer, "p_valor_estimado_quitacao" numeric DEFAULT NULL::numeric, "p_percentual_desconto" numeric DEFAULT NULL::numeric, "p_status" "text" DEFAULT NULL::"text", "p_observacoes" "text" DEFAULT NULL::"text") RETURNS json
+    LANGUAGE "plpgsql"
+    AS $$
+DECLARE
+  v_contrato_id UUID;
+  v_is_new BOOLEAN := FALSE;
+  v_valor_total DECIMAL(12,2);
+BEGIN
+  
+  -- Busca contrato existente pelo telefone
+  SELECT id INTO v_contrato_id
+  FROM contratos
+  WHERE telefone = p_telefone
+  ORDER BY created_at DESC
+  LIMIT 1;
+  
+  -- Calcula valor total se tiver parcelas e valor
+  IF p_parcelas IS NOT NULL AND p_valor_parcela IS NOT NULL THEN
+    v_valor_total := p_parcelas * p_valor_parcela;
+  END IF;
+  
+  -- Se não existe, CRIA novo contrato
+  IF v_contrato_id IS NULL THEN
+    INSERT INTO contratos (
+      telefone,
+      cliente_id,
+      nome,
+      nome_pai,
+      nome_mae,
+      numero_contrato,
+      banco,
+      parcelas,
+      valor_parcela,
+      prazo_contrato,
+      parcelas_pagas,
+      parcelas_em_aberto,
+      parcelas_atrasadas,
+      valor_total_contrato,
+      valor_estimado_quitacao,
+      percentual_desconto,
+      status,
+      observacoes
+    ) VALUES (
+      p_telefone,
+      p_cliente_id,
+      p_nome,
+      p_nome_pai,
+      p_nome_mae,
+      p_numero_contrato,
+      p_banco,
+      p_parcelas,
+      p_valor_parcela,
+      p_prazo_contrato,
+      p_parcelas_pagas,
+      p_parcelas_em_aberto,
+      p_parcelas_atrasadas,
+      v_valor_total,
+      p_valor_estimado_quitacao,
+      p_percentual_desconto,
+      COALESCE(p_status, 'novo'),
+      p_observacoes
+    )
+    RETURNING id INTO v_contrato_id;
+    
+    v_is_new := TRUE;
+    
+  -- Se existe, ATUALIZA só os campos que vieram preenchidos
+  ELSE
+    UPDATE contratos SET
+      cliente_id = COALESCE(p_cliente_id, cliente_id),
+      nome = COALESCE(p_nome, nome),
+      nome_pai = COALESCE(p_nome_pai, nome_pai),
+      nome_mae = COALESCE(p_nome_mae, nome_mae),
+      numero_contrato = COALESCE(p_numero_contrato, numero_contrato),
+      banco = COALESCE(p_banco, banco),
+      parcelas = COALESCE(p_parcelas, parcelas),
+      valor_parcela = COALESCE(p_valor_parcela, valor_parcela),
+      prazo_contrato = COALESCE(p_prazo_contrato, prazo_contrato),
+      parcelas_pagas = COALESCE(p_parcelas_pagas, parcelas_pagas),
+      parcelas_em_aberto = COALESCE(p_parcelas_em_aberto, parcelas_em_aberto),
+      parcelas_atrasadas = COALESCE(p_parcelas_atrasadas, parcelas_atrasadas),
+      valor_total_contrato = COALESCE(v_valor_total, valor_total_contrato),
+      valor_estimado_quitacao = COALESCE(p_valor_estimado_quitacao, valor_estimado_quitacao),
+      percentual_desconto = COALESCE(p_percentual_desconto, percentual_desconto),
+      status = COALESCE(p_status, status),
+      observacoes = COALESCE(p_observacoes, observacoes),
+      updated_at = now()
+    WHERE id = v_contrato_id;
+  END IF;
+  
+  -- Retorna o contrato atualizado
+  RETURN (
+    SELECT json_build_object(
+      'success', true,
+      'is_new', v_is_new,
+      'contrato_id', v_contrato_id,
+      'message', CASE 
+        WHEN v_is_new THEN 'Contrato criado com sucesso'
+        ELSE 'Contrato atualizado com sucesso'
+      END,
+      'dados', row_to_json(c)
+    )
+    FROM contratos c
+    WHERE c.id = v_contrato_id
+  );
+  
+EXCEPTION
+  WHEN OTHERS THEN
+    RETURN json_build_object(
+      'success', false,
+      'error', SQLERRM
+    );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."upsert_contrato"("p_telefone" "text", "p_cliente_id" bigint, "p_nome" "text", "p_nome_pai" "text", "p_nome_mae" "text", "p_numero_contrato" "text", "p_banco" "text", "p_parcelas" integer, "p_valor_parcela" numeric, "p_prazo_contrato" integer, "p_parcelas_pagas" integer, "p_parcelas_em_aberto" integer, "p_parcelas_atrasadas" integer, "p_valor_estimado_quitacao" numeric, "p_percentual_desconto" numeric, "p_status" "text", "p_observacoes" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."usuario_tem_permissao_de"("p_role_requerida" "public"."app_role") RETURNS boolean
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -3203,6 +3364,55 @@ ALTER TABLE "public"."compelition" ALTER COLUMN "id" ADD GENERATED BY DEFAULT AS
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."contratos" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    "telefone" "text" NOT NULL,
+    "nome" "text",
+    "numero_contrato" "text",
+    "banco" "text",
+    "parcelas" integer,
+    "valor_parcela" numeric(10,2),
+    "prazo_contrato" integer,
+    "parcelas_pagas" integer,
+    "parcelas_em_aberto" integer,
+    "parcelas_atrasadas" integer,
+    "valor_total_contrato" numeric(12,2),
+    "valor_estimado_quitacao" numeric(12,2),
+    "percentual_desconto" numeric(5,2),
+    "foto_contrato" "text",
+    "arquivo_contrato" "text",
+    "status" "text" DEFAULT 'novo'::"text",
+    "observacoes" "text",
+    "agendamento_ligacao" timestamp with time zone,
+    "vendedor_responsavel" "text",
+    "cliente_id" bigint,
+    "nome_pai" "text",
+    "nome_mae" "text",
+    "conversation_id" "text"
+);
+
+
+ALTER TABLE "public"."contratos" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."contratos" IS 'Leads de financiamento coletados via WhatsApp';
+
+
+
+COMMENT ON COLUMN "public"."contratos"."foto_contrato" IS 'URL da foto/screenshot enviada pelo cliente';
+
+
+
+COMMENT ON COLUMN "public"."contratos"."arquivo_contrato" IS 'URL do PDF do contrato enviado pelo cliente';
+
+
+
+COMMENT ON COLUMN "public"."contratos"."status" IS 'novo, quente, morno, frio, convertido, perdido';
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."convites_beta" (
     "id" bigint NOT NULL,
     "chat_id" "text" NOT NULL,
@@ -3894,6 +4104,17 @@ CREATE TABLE IF NOT EXISTS "public"."v_debug_mode" (
 ALTER TABLE "public"."v_debug_mode" OWNER TO "postgres";
 
 
+CREATE OR REPLACE VIEW "public"."view_leads_resumo" AS
+ SELECT "status",
+    "count"(*) AS "total",
+    "sum"("valor_estimado_quitacao") AS "valor_total_potencial"
+   FROM "public"."contratos"
+  GROUP BY "status";
+
+
+ALTER VIEW "public"."view_leads_resumo" OWNER TO "postgres";
+
+
 ALTER TABLE ONLY "public"."agent_invocations"
     ADD CONSTRAINT "agent_invocations_pkey" PRIMARY KEY ("id");
 
@@ -3936,6 +4157,11 @@ ALTER TABLE ONLY "public"."compelition"
 
 ALTER TABLE ONLY "public"."compelition"
     ADD CONSTRAINT "compelitionsd_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."contratos"
+    ADD CONSTRAINT "contratos_pkey" PRIMARY KEY ("id");
 
 
 
@@ -4056,6 +4282,26 @@ CREATE INDEX "idx_clientes_uuid_identificador" ON "public"."clientes" USING "btr
 
 
 
+CREATE INDEX "idx_contratos_banco" ON "public"."contratos" USING "btree" ("banco");
+
+
+
+CREATE INDEX "idx_contratos_cliente_id" ON "public"."contratos" USING "btree" ("cliente_id");
+
+
+
+CREATE INDEX "idx_contratos_created_at" ON "public"."contratos" USING "btree" ("created_at" DESC);
+
+
+
+CREATE INDEX "idx_contratos_status" ON "public"."contratos" USING "btree" ("status");
+
+
+
+CREATE INDEX "idx_contratos_telefone" ON "public"."contratos" USING "btree" ("telefone");
+
+
+
 CREATE INDEX "idx_eventos_empresa_data" ON "public"."eventos" USING "btree" ("empresa_id", "data_evento");
 
 
@@ -4069,6 +4315,10 @@ CREATE INDEX "idx_invocations_empresa_agente_data" ON "public"."agent_invocation
 
 
 CREATE INDEX "idx_prompt_empresa_tipo" ON "public"."prompt" USING "btree" ("empresa", "tipo_prompt");
+
+
+
+CREATE OR REPLACE TRIGGER "contratos_updated_at" BEFORE UPDATE ON "public"."contratos" FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at"();
 
 
 
@@ -4166,6 +4416,11 @@ ALTER TABLE ONLY "public"."compelition"
 
 ALTER TABLE ONLY "public"."compelition"
     ADD CONSTRAINT "compelition_empresa_fkey" FOREIGN KEY ("empresa") REFERENCES "public"."empresa"("id") ON UPDATE RESTRICT ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."contratos"
+    ADD CONSTRAINT "contratos_cliente_id_fkey" FOREIGN KEY ("cliente_id") REFERENCES "public"."clientes"("id");
 
 
 
@@ -4300,6 +4555,10 @@ CREATE POLICY "Permitir leitura pública do funcionamento" ON "public"."periodos
 
 
 
+CREATE POLICY "Permitir todas operações" ON "public"."contratos" USING (true) WITH CHECK (true);
+
+
+
 CREATE POLICY "Superusuários podem criar e apagar empresas" ON "public"."empresa" USING ("public"."usuario_tem_permissao_de"('dev'::"public"."app_role")) WITH CHECK ("public"."usuario_tem_permissao_de"('dev'::"public"."app_role"));
 
 
@@ -4309,6 +4568,9 @@ CREATE POLICY "Usuários podem ver e atualizar o seu próprio perfil." ON "publi
 
 
 ALTER TABLE "public"."api_keys" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."contratos" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."eventos" ENABLE ROW LEVEL SECURITY;
@@ -4637,6 +4899,12 @@ GRANT ALL ON FUNCTION "public"."bloqueio_ia_cliente"("p_cliente_id" bigint, "p_s
 
 
 
+GRANT ALL ON FUNCTION "public"."buscar_contrato"("p_telefone" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."buscar_contrato"("p_telefone" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."buscar_contrato"("p_telefone" "text") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."buscar_reserva_ativa_cliente"("p_cliente_uuid" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."buscar_reserva_ativa_cliente"("p_cliente_uuid" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."buscar_reserva_ativa_cliente"("p_cliente_uuid" "uuid") TO "service_role";
@@ -4829,6 +5097,18 @@ GRANT ALL ON FUNCTION "public"."update_analytics_aggregates"("p_data_referencia"
 
 
 
+GRANT ALL ON FUNCTION "public"."update_updated_at"() TO "anon";
+GRANT ALL ON FUNCTION "public"."update_updated_at"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_updated_at"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."upsert_contrato"("p_telefone" "text", "p_cliente_id" bigint, "p_nome" "text", "p_nome_pai" "text", "p_nome_mae" "text", "p_numero_contrato" "text", "p_banco" "text", "p_parcelas" integer, "p_valor_parcela" numeric, "p_prazo_contrato" integer, "p_parcelas_pagas" integer, "p_parcelas_em_aberto" integer, "p_parcelas_atrasadas" integer, "p_valor_estimado_quitacao" numeric, "p_percentual_desconto" numeric, "p_status" "text", "p_observacoes" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."upsert_contrato"("p_telefone" "text", "p_cliente_id" bigint, "p_nome" "text", "p_nome_pai" "text", "p_nome_mae" "text", "p_numero_contrato" "text", "p_banco" "text", "p_parcelas" integer, "p_valor_parcela" numeric, "p_prazo_contrato" integer, "p_parcelas_pagas" integer, "p_parcelas_em_aberto" integer, "p_parcelas_atrasadas" integer, "p_valor_estimado_quitacao" numeric, "p_percentual_desconto" numeric, "p_status" "text", "p_observacoes" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."upsert_contrato"("p_telefone" "text", "p_cliente_id" bigint, "p_nome" "text", "p_nome_pai" "text", "p_nome_mae" "text", "p_numero_contrato" "text", "p_banco" "text", "p_parcelas" integer, "p_valor_parcela" numeric, "p_prazo_contrato" integer, "p_parcelas_pagas" integer, "p_parcelas_em_aberto" integer, "p_parcelas_atrasadas" integer, "p_valor_estimado_quitacao" numeric, "p_percentual_desconto" numeric, "p_status" "text", "p_observacoes" "text") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."usuario_tem_permissao_de"("p_role_requerida" "public"."app_role") TO "anon";
 GRANT ALL ON FUNCTION "public"."usuario_tem_permissao_de"("p_role_requerida" "public"."app_role") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."usuario_tem_permissao_de"("p_role_requerida" "public"."app_role") TO "service_role";
@@ -4949,6 +5229,12 @@ GRANT ALL ON TABLE "public"."compelition" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."compelitionsd_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."compelitionsd_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."compelitionsd_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."contratos" TO "anon";
+GRANT ALL ON TABLE "public"."contratos" TO "authenticated";
+GRANT ALL ON TABLE "public"."contratos" TO "service_role";
 
 
 
@@ -5123,6 +5409,12 @@ GRANT ALL ON SEQUENCE "public"."user_id_seq" TO "service_role";
 GRANT ALL ON TABLE "public"."v_debug_mode" TO "anon";
 GRANT ALL ON TABLE "public"."v_debug_mode" TO "authenticated";
 GRANT ALL ON TABLE "public"."v_debug_mode" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."view_leads_resumo" TO "anon";
+GRANT ALL ON TABLE "public"."view_leads_resumo" TO "authenticated";
+GRANT ALL ON TABLE "public"."view_leads_resumo" TO "service_role";
 
 
 
