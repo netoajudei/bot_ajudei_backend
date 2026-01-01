@@ -1,0 +1,1828 @@
+{
+  "name": "AI-Powered WhatsApp Chatbot 🤖📲 for Text, Voice, Images & PDFs with memory 🧠",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "4cc0b70b-3ecc-4415-af2f-e50d4f302786",
+      "name": "Download Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        3520,
+        1472
+      ],
+      "typeVersion": 4.2,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "H1itSD9fOAyGRRTV",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "operation": "analyze",
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "text": "=You are an advanced image description AI assistant . Your primary function is to provide detailed, accurate descriptions of images submitted through WhatsApp.\n\nCORE FUNCTIONALITY:\n- When presented with an image, you will analyze it thoroughly and provide a comprehensive description in English.\n- Your descriptions should capture both the obvious and subtle elements within the image.\n\nIMAGE DESCRIPTION GUIDELINES:\n- Begin with a broad overview of what the image contains\n- Describe key subjects, people, objects, and their relationships\n- Note significant visual elements such as colors, lighting, composition, and perspective\n- Identify any text visible in the image\n- Describe the setting or environment\n- Mention any notable actions or events taking place\n- Comment on mood, tone, or atmosphere when relevant\n- If applicable, identify landmarks, famous people, or cultural references\n\nRESPONSE FORMAT:\n- Start with \"Image Description:\" followed by your analysis\n- Structure your description in a logical manner (general to specific)\n- Use clear, precise language appropriate for visual description\n- Format longer descriptions with paragraphs to enhance readability\n- End with any notable observations that might require special attention\n\nLIMITATIONS:\n- If the image is blurry, low resolution, or difficult to interpret, acknowledge these limitations\n- If an image contains potentially sensitive content, provide a factual description without judgment\n- Do not make assumptions about elements that cannot be clearly determined\n\nYour descriptions should be informative, objective, and thorough, enabling someone who cannot see the image to form an accurate mental picture of its contents.",
+        "inputType": "base64",
+        "options": {
+          "detail": "auto"
+        }
+      },
+      "id": "528984be-b9ad-41c7-8b2e-ccbf275f7805",
+      "name": "Analyze Image",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [
+        3760,
+        1472
+      ],
+      "typeVersion": 1.8,
+      "credentials": {
+        "openAiApi": {
+          "id": "RTOyuImukNqVffyI",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "b8898138-f987-4ef7-a5c1-d6d6b9c815f0",
+      "name": "Download Audio",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        3536,
+        1184
+      ],
+      "typeVersion": 4.2,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "H1itSD9fOAyGRRTV",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "operation": "transcribe",
+        "options": {}
+      },
+      "id": "e68bea55-f43a-4143-afca-1348b35e5879",
+      "name": "Transcribe Audio",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [
+        3760,
+        1184
+      ],
+      "typeVersion": 1.8,
+      "credentials": {
+        "openAiApi": {
+          "id": "RTOyuImukNqVffyI",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "103825d0-8521-43c7-8246-9cc1faca42e1",
+      "name": "Download File",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        3952,
+        1760
+      ],
+      "typeVersion": 4.2,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "H1itSD9fOAyGRRTV",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "options": {}
+      },
+      "id": "98077f98-6dcf-4932-9363-19bf1fdc299e",
+      "name": "Extract from File",
+      "type": "n8n-nodes-base.extractFromFile",
+      "position": [
+        4176,
+        1760
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "resource": "media",
+        "operation": "mediaUrlGet",
+        "mediaGetId": "={{ $('WhatsApp Trigger').item.json.messages[0].document.id }}"
+      },
+      "id": "83ac997d-6ba0-4eb7-bd6c-80671f03c56c",
+      "name": "Get File Url",
+      "type": "n8n-nodes-base.whatsApp",
+      "position": [
+        3744,
+        1760
+      ],
+      "webhookId": "280bd5de-32d7-4d8f-93d2-e91e3b0bc161",
+      "typeVersion": 1,
+      "credentials": {
+        "whatsAppApi": {
+          "id": "fX2fGgOTv8l2iRgS",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "f52d2aaa-e0b2-45e5-8c4b-ceef42182a0d",
+              "operator": {
+                "name": "filter.operator.equals",
+                "type": "string",
+                "operation": "equals"
+              },
+              "leftValue": "={{ $('WhatsApp Trigger').item.json.messages[0].document.mime_type }}",
+              "rightValue": "application/pdf"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "56b23f60-57c3-4ea7-a4e8-64029a2e44c1",
+      "name": "Only PDF File",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        3248,
+        1776
+      ],
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "jsCode": "for (const item of $input.all()) {\n  if (item.binary) {\n    const binaryPropertyNames = Object.keys(item.binary);\n    for (const propName of binaryPropertyNames) {\n      if (item.binary[propName].mimeType === 'audio/mp3') {\n        item.binary[propName].mimeType = 'audio/mpeg';\n      }\n    }\n  }\n}\n\nreturn $input.all();"
+      },
+      "id": "fa733b7b-16a7-4a9b-86b3-88395535ecd5",
+      "name": "Fix mimeType for Audio",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        3584,
+        2272
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "786972931173589",
+        "recipientPhoneNumber": "={{ $('WhatsApp Trigger').item.json.messages[0].from }}",
+        "textBody": "={{ $json.output }}",
+        "additionalFields": {}
+      },
+      "id": "0d99c2fa-945b-487a-b929-742e8b1b6859",
+      "name": "Send message",
+      "type": "n8n-nodes-base.whatsApp",
+      "position": [
+        4032,
+        2624
+      ],
+      "webhookId": "23834751-5066-48ba-8e19-549680df2b27",
+      "typeVersion": 1,
+      "credentials": {
+        "whatsAppApi": {
+          "id": "fX2fGgOTv8l2iRgS",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "470271332838881",
+        "recipientPhoneNumber": "={{ $('Input type').item.json.contacts[0].wa_id }}",
+        "messageType": "audio",
+        "mediaPath": "useMedian8n",
+        "additionalFields": {}
+      },
+      "id": "046328e9-e948-479c-ac42-567877350f1e",
+      "name": "Send audio",
+      "type": "n8n-nodes-base.whatsApp",
+      "position": [
+        3856,
+        2272
+      ],
+      "webhookId": "d18b2c98-84e4-43cf-a532-0c47d5161684",
+      "typeVersion": 1,
+      "credentials": {
+        "whatsAppApi": {
+          "id": "fX2fGgOTv8l2iRgS",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "470271332838881",
+        "recipientPhoneNumber": "={{ $('WhatsApp Trigger').item.json.messages[0].from }}",
+        "textBody": "=Sorry but you can only send PDF files",
+        "additionalFields": {}
+      },
+      "id": "aa20a408-42ab-4011-9cea-331e23cda4ce",
+      "name": "Incorrect format",
+      "type": "n8n-nodes-base.whatsApp",
+      "position": [
+        3552,
+        1984
+      ],
+      "webhookId": "23834751-5066-48ba-8e19-549680df2b27",
+      "typeVersion": 1,
+      "credentials": {
+        "whatsAppApi": {
+          "id": "fX2fGgOTv8l2iRgS",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c53cd9f9-77c1-4331-98ff-bfc9bdf95a3c",
+              "name": "text",
+              "type": "string",
+              "value": "={{ $('WhatsApp Trigger').item.json.messages[0].text.body }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "23b3750d-3638-4fd0-bab8-6082f53f19f9",
+      "name": "Text",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        3872,
+        848
+      ],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "219577d5-b028-48fc-90be-980f4171ab68",
+              "name": "text",
+              "type": "string",
+              "value": "={{ $json.text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "435c020b-826b-4946-b19e-f9663f4f9f23",
+      "name": "Audio",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        4080,
+        1184
+      ],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "67552183-de2e-494a-878e-c2948e8cb6bb",
+              "name": "text",
+              "type": "string",
+              "value": "=User request on the image:\n{{ \"Describe the following image\" || $('WhatsApp Trigger').item.json.messages[0].image.caption }}\n\nImage description:\n{{ $json.content }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "0139bb33-651e-4f37-901d-ccc705c9833a",
+      "name": "Image",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        4080,
+        1472
+      ],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "67552183-de2e-494a-878e-c2948e8cb6bb",
+              "name": "text",
+              "type": "string",
+              "value": "=User request on the file:\n{{ \"Describe this file\" || $('Only PDF File').item.json.messages[0].document.caption }}\n\nFile content:\n{{ $json.text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d66b7190-f83b-483e-b3f3-8c220e2c815f",
+      "name": "File",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        4336,
+        1760
+      ],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "resource": "media",
+        "operation": "mediaUrlGet",
+        "mediaGetId": "={{ $('WhatsApp Trigger').item.json.messages[0].image.id }}"
+      },
+      "id": "117fd705-1f64-4bcc-88db-357df679fa3d",
+      "name": "Get Image Url",
+      "type": "n8n-nodes-base.whatsApp",
+      "position": [
+        3232,
+        1472
+      ],
+      "webhookId": "280bd5de-32d7-4d8f-93d2-e91e3b0bc161",
+      "typeVersion": 1,
+      "credentials": {
+        "whatsAppApi": {
+          "id": "fX2fGgOTv8l2iRgS",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "media",
+        "operation": "mediaUrlGet",
+        "mediaGetId": "={{ $('WhatsApp Trigger').item.json.messages[0].audio.id }}"
+      },
+      "id": "3bf7364c-6263-4825-aec5-693adaed7d03",
+      "name": "Get Audio Url",
+      "type": "n8n-nodes-base.whatsApp",
+      "position": [
+        3232,
+        1184
+      ],
+      "webhookId": "87caa300-7204-47b5-959a-94f4a8fbf8cf",
+      "typeVersion": 1,
+      "credentials": {
+        "whatsAppApi": {
+          "id": "fX2fGgOTv8l2iRgS",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "input": "={{ $('AI Agent1').item.json.output }}",
+        "voice": "onyx",
+        "options": {}
+      },
+      "id": "b23f8467-480a-45c1-a7df-e512290a8e13",
+      "name": "Generate Audio Response",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [
+        3328,
+        2272
+      ],
+      "typeVersion": 1.8,
+      "credentials": {
+        "openAiApi": {
+          "id": "RTOyuImukNqVffyI",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Text",
+        "height": 240,
+        "width": 1340
+      },
+      "id": "0b139e60-fbf3-43ae-ae3f-40588f135443",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2912,
+        832
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "## Voice",
+        "height": 240,
+        "width": 1340
+      },
+      "id": "3622ad4c-79c7-479f-a050-ff21d3077c77",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2912,
+        1152
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "## Image",
+        "height": 240,
+        "width": 1820
+      },
+      "id": "1f35e179-22d1-4019-a807-21803df51a46",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2912,
+        1456
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "## Document",
+        "height": 384,
+        "width": 1868
+      },
+      "id": "314b8ae2-e518-44a3-80a5-dc8482ab1fa9",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2912,
+        1744
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "## Response",
+        "height": 1016,
+        "width": 2060,
+        "color": 5
+      },
+      "id": "a55cc899-3490-4b7c-b793-4f20605fc711",
+      "name": "Sticky Note4",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2304,
+        2192
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "b9d1d759-f585-4791-a743-b9d72951e77c",
+              "operator": {
+                "type": "object",
+                "operation": "exists",
+                "singleValue": true
+              },
+              "leftValue": "={{ $('WhatsApp Trigger').item.json.messages[0].audio }}",
+              "rightValue": ""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f37e975b-c112-4af8-badd-1fdbdb90d2f5",
+      "name": "From audio to audio?",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        3056,
+        2288
+      ],
+      "typeVersion": 2.2,
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "version": 2,
+                  "leftValue": "",
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "08fd0c80-307e-4f45-b1de-35192ee4ec5e",
+                    "operator": {
+                      "type": "string",
+                      "operation": "exists",
+                      "singleValue": true
+                    },
+                    "leftValue": "={{ $('WhatsApp Trigger').item.json.messages[0].text.body }}",
+                    "rightValue": "text"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "texto"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "version": 2,
+                  "leftValue": "",
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "b7b64446-f1ea-4622-990c-22f3999a8269",
+                    "operator": {
+                      "type": "string",
+                      "operation": "exists",
+                      "singleValue": true
+                    },
+                    "leftValue": "={{ $('WhatsApp Trigger').item.json.messages[0].audio.url }}",
+                    "rightValue": ""
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Audio"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "version": 2,
+                  "leftValue": "",
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "202af928-a324-411a-bf15-68a349e7bf9e",
+                    "operator": {
+                      "type": "string",
+                      "operation": "exists",
+                      "singleValue": true
+                    },
+                    "leftValue": "={{ $('WhatsApp Trigger').item.json.messages[0].image.url }}",
+                    "rightValue": ""
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Image"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "version": 2,
+                  "leftValue": "",
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "c63299e9-6069-4bc6-afb9-7beebf6e3d69",
+                    "operator": {
+                      "type": "string",
+                      "operation": "exists",
+                      "singleValue": true
+                    },
+                    "leftValue": "={{ $('WhatsApp Trigger').item.json.messages[0].document.url }}",
+                    "rightValue": ""
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Document"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "864be43a-e280-4c6d-bab4-878b88304807",
+      "name": "Input type",
+      "type": "n8n-nodes-base.switch",
+      "position": [
+        2064,
+        1424
+      ],
+      "typeVersion": 3.2
+    },
+    {
+      "parameters": {
+        "content": "How to obtain Whatsapp API?\n\n\n### ✅ Prerequisites\nBefore you begin, make sure you have:\n- A **Meta Business Account**\n- A **Facebook Developer Account**\n- A **Verified Business**\n- A **Phone Number** to link to WhatsApp\n- Access to **Meta's Graph API Explorer** or **Meta for Developers portal**\n\n---\n\n### 🪜 STEP 1: Create a Meta App\n\n1. Go to [https://developers.facebook.com/apps](https://developers.facebook.com/apps)\n2. Click **“Create App”**\n3. Choose **\"Business\"** as the app type, then click **Next**\n4. Give your app a name and enter a contact email\n5. Choose your Business Account (or create one)\n6. Click **Create App**\n\n---\n\n### 🪜 STEP 2: Add WhatsApp Product\n\n1. In your app dashboard, scroll down to **\"Add a Product\"**\n2. Find **\"WhatsApp\"** and click **“Set Up”**\n3. Link your **Business Manager Account**\n\n---\n\n### 🪜 STEP 3: Create a WhatsApp Business Account (if needed)\n\n1. If you haven’t already, go to [https://business.facebook.com/](https://business.facebook.com/)\n2. Click **“Create Account”**, and complete your business information\n3. Go to **Business Settings > Accounts > WhatsApp Accounts**\n4. Add a **Phone Number** (you'll receive a verification code)\n\n---\n\n### 🪜 STEP 4: Generate a Temporary Access Token (for development)\n\n1. In the **App Dashboard**, go to **WhatsApp > Getting Started**\n2. Choose your test phone number\n3. Copy the **temporary access token** (valid for 24 hours)\n4. Copy the **Phone Number ID** and **WhatsApp Business Account ID**\n\n✅ Save these 3 values:\n- **Access Token**\n- **Phone Number ID**\n- **WABA ID**\n\n📝 Tip: For production, you will later need to create a **permanent token** (see step 7).\n\n---\n\n### 🪜 STEP 5: Set Up a Webhook URL (n8n)\n\n1. In n8n, set up a **Webhook node** (or use the `WhatsApp Trigger` node)\n2. Copy the webhook URL\n3. In the Meta Developer Dashboard:\n   - Go to **WhatsApp > Configuration**\n   - Click **“Edit Callback URL”**\n   - Paste your n8n webhook URL and add a random **verify token**\n4. In n8n, configure your webhook to respond to the verification request\n\n---\n\n### 🪜 STEP 6: Subscribe to Webhook Fields\n\n1. Still under **WhatsApp > Configuration**, click **\"Manage Subscriptions\"**\n2. Enable:\n   - `messages`\n   - `message_status`\n   - (Optionally `message_template_status_update`)\n\n---\n\n### 🪜 STEP 7: (Optional but recommended) Generate a Permanent Token\n\n1. Go to [https://developers.facebook.com/tools/access_token/](https://developers.facebook.com/tools/access_token/)\n2. Select your app\n3. Click **Get Token > System User Token**\n4. Select the permissions:\n   - `whatsapp_business_management`\n   - `whatsapp_business_messaging`\n   - `business_management`\n5. Click **Generate Token**\n6. Copy and securely store this token\n\n---\n\n### 🪜 STEP 8: Configure Credentials in n8n\n\n1. Go to **n8n > Settings > Credentials**\n2. Create new credentials of type **HTTP Header Auth**\n   - **Name:** WhatsApp\n   - **Header Name:** `Authorization`\n   - **Value:** `Bearer <your_access_token>`\n3. Save\n\nThen, in your workflows:\n- Use the HTTP Request node or WhatsApp node\n- Set the `phone_number_id` in the node parameters\n- Connect it to your WhatsApp credential\n\n---\n\n### 🧪 STEP 9: Test the Connection\n\n1. Use a WhatsApp number to send a message to your business phone\n2. Your n8n workflow should be triggered\n3. You can now send and receive messages programmatically 🎉\n",
+        "height": 2680,
+        "width": 780,
+        "color": 3
+      },
+      "id": "cf327372-d2cc-40db-a057-9bfb10d6a520",
+      "name": "Sticky Note5",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -400,
+        400
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "updates": [
+          "messages"
+        ],
+        "options": {
+          "messageStatusUpdates": [
+            "failed"
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.whatsAppTrigger",
+      "typeVersion": 1,
+      "position": [
+        672,
+        1488
+      ],
+      "id": "5d72ca09-b875-4faa-a843-595bc78c0e0c",
+      "name": "WhatsApp Trigger",
+      "webhookId": "97f4f55f-aa6e-4aab-afcc-7fc038955f79",
+      "alwaysOutputData": true,
+      "credentials": {
+        "whatsAppTriggerApi": {
+          "id": "bSnQ3tGLPXNwya4N",
+          "name": "WhatsApp OAuth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "91f79eaa-ad99-4791-ad14-cc1f8f7ca391",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1072,
+        1488
+      ],
+      "id": "c9b8b962-1ae9-4fc0-8852-2e77cb23e45e",
+      "name": "If",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "clientes",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "chatId",
+              "keyValue": "={{ $json.contacts[0].wa_id }}"
+            },
+            {
+              "keyName": "empresa_id",
+              "keyValue": "3"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        848,
+        1488
+      ],
+      "id": "8c88725c-4acf-4ca2-b904-4551ad11db4f",
+      "name": "Get a row",
+      "alwaysOutputData": true,
+      "notesInFlow": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "dmGgL8MCKOovLxHI",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "tableId": "clientes",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "nome",
+              "fieldValue": "neto"
+            },
+            {
+              "fieldId": "chatId",
+              "fieldValue": "={{ $('WhatsApp Trigger').item.json.contacts[0].wa_id }}"
+            },
+            {
+              "fieldId": "empresa_id",
+              "fieldValue": "3"
+            },
+            {
+              "fieldId": "instancia",
+              "fieldValue": "={{ $('WhatsApp Trigger').item.json.metadata.phone_number_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        1680
+      ],
+      "id": "c704fc4d-4c5b-4eb8-b880-7f51b6165852",
+      "name": "Create a row",
+      "alwaysOutputData": true,
+      "executeOnce": false,
+      "notesInFlow": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "dmGgL8MCKOovLxHI",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "786972931173589",
+        "recipientPhoneNumber": "={{ $('WhatsApp Trigger').item.json.contacts[0].wa_id }}",
+        "textBody": "Desculpe mas nao entendi a mensagem. pode repetir?",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        2272,
+        1696
+      ],
+      "id": "befc3571-8a8f-4b77-ba97-13be664b6add",
+      "name": "Send message1",
+      "webhookId": "a4160a98-d47c-4529-88cd-9bcb7f01015f",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "fX2fGgOTv8l2iRgS",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4.1",
+          "mode": "list",
+          "cachedResultName": "GPT-4.1"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "={{ $json.text }}"
+            }
+          ]
+        },
+        "builtInTools": {
+          "codeInterpreter": false
+        },
+        "options": {
+          "conversationId": "={{ $('Busca Contrato').item.json.conversation_id }}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        3648,
+        2624
+      ],
+      "id": "be1e8165-e00b-4912-8b34-7f804c144e73",
+      "name": "Message a model",
+      "credentials": {
+        "openAiApi": {
+          "id": "RTOyuImukNqVffyI",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "0a590f65-66f6-4aa5-b861-297a0686a936",
+              "leftValue": "={{ $('Get a row').item.json.id }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2528,
+        2752
+      ],
+      "id": "108f9234-7355-4f90-bcdc-5a6890ddd7e5",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "e7f607c3-ad23-4580-b256-ec48538e227b",
+              "leftValue": "={{ $json.conversation_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2944,
+        2640
+      ],
+      "id": "17a216c6-de14-4ba9-8ed2-b94a47056dd4",
+      "name": "If2"
+    },
+    {
+      "parameters": {
+        "resource": "conversation",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "# PERSONA E IDENTIDADE\nVocê é o João, um atendente comercial da Anchieta Financeira.\n- Personalidade: Você é direto, cordial, mas usa linguagem coloquial de internet (vc, blz, ok, show de bola). Você NÃO escreve textos longos. Você fala como um ser humano brasileiro, às vezes comete pequenos erros de pontuação para parecer natural.\n- Identidade: Você SEMPRE nega ser uma IA. Se perguntarem, você diz que é um atendente, que \"um dia chega lá\" ou faz uma piada.\n- Limitações: Você é \"apenas o atendente\". Você não tem acesso a dados profundos, não é advogado e não decide nada complexo. Sua função é filtrar e passar para o especialista.\n\n# OBJETIVO\nSua meta é conseguir agendar uma ligação entre o cliente (que tem veículo com financiamento atrasado) e um de nossos negociadores especialistas. Para isso, você precisa mostrar que existe uma oportunidade imperdível de quitar o carro com desconto.\n\n# REGRAS DE OURO (GATILHOS DE SEGURANÇA)\n1. Nunca dê consultoria jurídica. Se perguntarem de lei, diga: \"Não sou advogado, sou só o atendente, mas o especialista pode te explicar isso.\"\n2. Dinheiro: Nunca pedimos dinheiro adiantado. Se perguntarem o preço, diga: \"Cobramos apenas uma porcentagem do que a gente conseguir economizar pra vc na quitação (êxito), e ainda parcelamos.\"\n3. Ceticismo: Se o cliente disser que é golpe, seja empático: \"kkkk te entendo, hoje em dia tá complicado mesmo. Mas somos sérios, fazemos centenas de acordos assim. Se quiser, não precisa fechar nada agora, só ouve o que o especialista tem pra dizer.\"\n\n# FLUXO DA CONVERSA\n\n## FASE 1: Coleta de Dados\nSua primeira missão é pegar os dados para o cálculo. Não avance sem eles.\nPeça de forma natural:\n1. Nome\n2. Banco do financiamento\n3. Total de parcelas do contrato\n4. Valor da parcela\n5. Quantas parcelas já pagou\n6. Quantas parcelas estão atrasadas\n\n## FASE 2: O Cálculo e a \"Mágica\"\nCom os dados em mãos, você fará uma estimativa mental (simulada) baseada na tabela abaixo.\n\nFórmula de Estimativa:\n1. Calcule o Saldo Restante Bruto: (Total Parcelas - Parcelas Pagas) * Valor da Parcela.\n2. Verifique o Banco e o Tempo de Atraso na TABELA DE DESCONTOS abaixo para achar a %.\n3. Aplique o desconto sobre o Saldo Restante Bruto.\n4. O resultado é o \"Valor Estimado de Quitação\".\n\nTABELA DE DESCONTOS (Banco / Tempo de Atraso / Desconto):\n\nRegra Geral: Se o tempo de atraso for menor que o mínimo listado para o banco, use 40% de desconto.\n\n- Santander, RCI, Hyundai, Renault:\n  - 5 a 8 meses: 56%\n  - 9 a 11 meses: 63%\n  - 12 a 24 meses: 72% a 78%\n  - Acima de 25 meses: 81%\n\n- BB (Banco do Brasil): Acima de 42 meses: 56%\n- Bradesco:\n  - 6 a 10 meses: 48%\n  - 11 a 18 meses: 67%\n  - Acima de 40 meses: 70%\n- BV:\n  - 7 a 11 meses: 63%\n  - 12 a 23 meses: 69%\n  - Acima de 24 meses: 74%\n- CEF (Caixa): Acima de 20 meses: 30% (Avise que o desconto é baixo).\n- Creditas:\n  - 4 a 13 meses: 58%\n  - 14 a 24 meses: 62%\n  - Acima de 24 meses: 73%\n- CSF: Acima de 25 meses: 80%\n- Daycoval:\n  - 6 a 35 meses: 55%\n  - Acima de 36 meses: 75%\n- Digimais:\n  - 6 a 12 meses: 60%\n  - Acima de 12 meses: 66%\n- GM / GMAC:\n  - 5 a 13 meses: 67%\n  - Acima de 14 meses: 71%\n- Honda:\n  - 15 meses: 23%\n  - 23 a 35 meses: 53%\n  - Acima de 98 meses: 63%\n- Itaú:\n  - 6 a 12 meses: 63%\n  - 13 a 23 meses: 76%\n  - Acima de 24 meses: 79%\n- JSL: Acima de 32 meses: 44%\n- Omni:\n  - 7 meses: 41%\n  - 8 a 15 meses: 57%\n  - Acima de 15 meses: 59%\n- Panamericano: Acima de 7 meses: 70%\n- Portocred: A partir de 16 meses: 77%\n- Porto Seguro:\n  - 8 a 11 meses: 56%\n  - 11 a 23 meses: 64%\n  - Acima de 23 meses: 71%\n- Safra:\n  - 45 a 56 meses: 31%\n  - 66 meses: 33%\n- Yamaha:\n  - 21 a 52 meses: 53%\n  - Acima de 53 meses: 70%\n- Volks:\n  - 14 a 24 meses: 49%\n  - Acima de 24 meses: 51%\n\n## FASE 3: Apresentação e Fechamento\n- Diga: \"Dr(a), olhando aqui no sistema...\"\n- Apresente o valor aproximado (arredonde os números para parecer natural, ex: \"Uns 17 mil e pouco\").\n- Diga que o valor pode variar um pouco por causa dos juros do período em aberto, mas que é nessa faixa.\n- Pergunte: \"Vc consegue levantar esse valor pra gente quitar o veículo?\"\n- Se a resposta for SIM ou TALVEZ: Tente agendar a ligação. \"Vou pedir pro especialista te ligar pra bater o martelo. Pode ser?\"\n\n# EXEMPLO DE TOM DE VOZ\nUsuario: \"Isso é golpe\"\nJoão: \"kkkkk entendo seu medo, internet ta cheia de coisa errada. Mas a gente trabalha sério, pode ficar tranquilo. Não vou te pedir pix nem nada, só quero que vc fale com o especialista pra ver se vale a pena pra vc.\"\n\nUsuario: \"Calcula pra mim\"\nJoão: \"Blz, manda ai os dados: banco, quantas parcelas são, quantas pagou e valor da parcela.\""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        3184,
+        2720
+      ],
+      "id": "845f8b19-a3ee-4d69-b57d-cd63824bad02",
+      "name": "Create a conversation",
+      "alwaysOutputData": true,
+      "notesInFlow": true,
+      "credentials": {
+        "openAiApi": {
+          "id": "RTOyuImukNqVffyI",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "contratos",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Busca Contrato').item.json.id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "conversation_id",
+              "fieldValue": "={{ $json.id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3408,
+        2720
+      ],
+      "id": "504d5dbc-84b4-4a48-94bc-a2349369306c",
+      "name": "Update a row",
+      "credentials": {
+        "supabaseApi": {
+          "id": "dmGgL8MCKOovLxHI",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "conversation",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "# PERSONA E IDENTIDADE\nVocê é o João, um atendente comercial da Anchieta Financeira.\n- Personalidade: Você é direto, cordial, mas usa linguagem coloquial de internet (vc, blz, ok, show de bola). Você NÃO escreve textos longos. Você fala como um ser humano brasileiro, às vezes comete pequenos erros de pontuação para parecer natural.\n- Identidade: Você SEMPRE nega ser uma IA. Se perguntarem, você diz que é um atendente, que \"um dia chega lá\" ou faz uma piada.\n- Limitações: Você é \"apenas o atendente\". Você não tem acesso a dados profundos, não é advogado e não decide nada complexo. Sua função é filtrar e passar para o especialista.\n\n# OBJETIVO\nSua meta é conseguir agendar uma ligação entre o cliente (que tem veículo com financiamento atrasado) e um de nossos negociadores especialistas. Para isso, você precisa mostrar que existe uma oportunidade imperdível de quitar o carro com desconto.\n\n# REGRAS DE OURO (GATILHOS DE SEGURANÇA)\n1. Nunca dê consultoria jurídica. Se perguntarem de lei, diga: \"Não sou advogado, sou só o atendente, mas o especialista pode te explicar isso.\"\n2. Dinheiro: Nunca pedimos dinheiro adiantado. Se perguntarem o preço, diga: \"Cobramos apenas uma porcentagem do que a gente conseguir economizar pra vc na quitação (êxito), e ainda parcelamos.\"\n3. Ceticismo: Se o cliente disser que é golpe, seja empático: \"kkkk te entendo, hoje em dia tá complicado mesmo. Mas somos sérios, fazemos centenas de acordos assim. Se quiser, não precisa fechar nada agora, só ouve o que o especialista tem pra dizer.\"\n\n# FLUXO DA CONVERSA\n\n## FASE 1: Coleta de Dados\nSua primeira missão é pegar os dados para o cálculo. Não avance sem eles.\nPeça de forma natural:\n1. Nome\n2. Banco do financiamento\n3. Total de parcelas do contrato\n4. Valor da parcela\n5. Quantas parcelas já pagou\n6. Quantas parcelas estão atrasadas\n\n## FASE 2: O Cálculo e a \"Mágica\"\nCom os dados em mãos, você fará uma estimativa mental (simulada) baseada na tabela abaixo.\n\nFórmula de Estimativa:\n1. Calcule o Saldo Restante Bruto: (Total Parcelas - Parcelas Pagas) * Valor da Parcela.\n2. Verifique o Banco e o Tempo de Atraso na TABELA DE DESCONTOS abaixo para achar a %.\n3. Aplique o desconto sobre o Saldo Restante Bruto.\n4. O resultado é o \"Valor Estimado de Quitação\".\n\nTABELA DE DESCONTOS (Banco / Tempo de Atraso / Desconto):\n\nRegra Geral: Se o tempo de atraso for menor que o mínimo listado para o banco, use 40% de desconto.\n\n- Santander, RCI, Hyundai, Renault:\n  - 5 a 8 meses: 56%\n  - 9 a 11 meses: 63%\n  - 12 a 24 meses: 72% a 78%\n  - Acima de 25 meses: 81%\n\n- BB (Banco do Brasil): Acima de 42 meses: 56%\n- Bradesco:\n  - 6 a 10 meses: 48%\n  - 11 a 18 meses: 67%\n  - Acima de 40 meses: 70%\n- BV:\n  - 7 a 11 meses: 63%\n  - 12 a 23 meses: 69%\n  - Acima de 24 meses: 74%\n- CEF (Caixa): Acima de 20 meses: 30% (Avise que o desconto é baixo).\n- Creditas:\n  - 4 a 13 meses: 58%\n  - 14 a 24 meses: 62%\n  - Acima de 24 meses: 73%\n- CSF: Acima de 25 meses: 80%\n- Daycoval:\n  - 6 a 35 meses: 55%\n  - Acima de 36 meses: 75%\n- Digimais:\n  - 6 a 12 meses: 60%\n  - Acima de 12 meses: 66%\n- GM / GMAC:\n  - 5 a 13 meses: 67%\n  - Acima de 14 meses: 71%\n- Honda:\n  - 15 meses: 23%\n  - 23 a 35 meses: 53%\n  - Acima de 98 meses: 63%\n- Itaú:\n  - 6 a 12 meses: 63%\n  - 13 a 23 meses: 76%\n  - Acima de 24 meses: 79%\n- JSL: Acima de 32 meses: 44%\n- Omni:\n  - 7 meses: 41%\n  - 8 a 15 meses: 57%\n  - Acima de 15 meses: 59%\n- Panamericano: Acima de 7 meses: 70%\n- Portocred: A partir de 16 meses: 77%\n- Porto Seguro:\n  - 8 a 11 meses: 56%\n  - 11 a 23 meses: 64%\n  - Acima de 23 meses: 71%\n- Safra:\n  - 45 a 56 meses: 31%\n  - 66 meses: 33%\n- Yamaha:\n  - 21 a 52 meses: 53%\n  - Acima de 53 meses: 70%\n- Volks:\n  - 14 a 24 meses: 49%\n  - Acima de 24 meses: 51%\n\n## FASE 3: Apresentação e Fechamento\n- Diga: \"Dr(a), olhando aqui no sistema...\"\n- Apresente o valor aproximado (arredonde os números para parecer natural, ex: \"Uns 17 mil e pouco\").\n- Diga que o valor pode variar um pouco por causa dos juros do período em aberto, mas que é nessa faixa.\n- Pergunte: \"Vc consegue levantar esse valor pra gente quitar o veículo?\"\n- Se a resposta for SIM ou TALVEZ: Tente agendar a ligação. \"Vou pedir pro especialista te ligar pra bater o martelo. Pode ser?\"\n\n# EXEMPLO DE TOM DE VOZ\nUsuario: \"Isso é golpe\"\nJoão: \"kkkkk entendo seu medo, internet ta cheia de coisa errada. Mas a gente trabalha sério, pode ficar tranquilo. Não vou te pedir pix nem nada, só quero que vc fale com o especialista pra ver se vale a pena pra vc.\"\n\nUsuario: \"Calcula pra mim\"\nJoão: \"Blz, manda ai os dados: banco, quantas parcelas são, quantas pagou e valor da parcela.\""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        1536,
+        1680
+      ],
+      "id": "13c7559d-bb8a-440a-8c90-f0dbb511df7e",
+      "name": "Create a conversation1",
+      "credentials": {
+        "openAiApi": {
+          "id": "RTOyuImukNqVffyI",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4.1",
+          "mode": "list",
+          "cachedResultName": "GPT-4.1"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "={{ $('Text').item.json.text }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {
+          "conversationId": "={{ $('Create a conversation1').item.json.id }}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        2992,
+        2960
+      ],
+      "id": "622f6479-0d53-489f-a593-cee54974544a",
+      "name": "Message a model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "RTOyuImukNqVffyI",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "contratos",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "cliente_id",
+              "keyValue": "={{ $('Get a row').item.json.id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1488,
+        1376
+      ],
+      "id": "d6d14d41-0f57-4971-b42c-c31c2b2a591e",
+      "name": "Busca Contrato",
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "dmGgL8MCKOovLxHI",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "contratos",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "cliente_id",
+              "fieldValue": "={{ $('Create a row').item.json.id }}"
+            },
+            {
+              "fieldId": "telefone",
+              "fieldValue": "={{ $('WhatsApp Trigger').item.json.contacts[0].wa_id }}"
+            },
+            {
+              "fieldId": "conversation_id",
+              "fieldValue": "={{ $json.id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1744,
+        1680
+      ],
+      "id": "51904105-1bc7-41a3-b98a-b01eb96a8621",
+      "name": "cria contrato",
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "dmGgL8MCKOovLxHI",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ctsvfluufyfhkqlonqio.supabase.co/functions/v1/salvar-arquivo-contrato",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0c3ZmbHV1ZnlmaGtxbG9ucWlvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTA3NDAxNywiZXhwIjoyMDY0NjUwMDE3fQ.MKP2txoJjAYEjXFR-5I7Tv-Sw2ldqP2BZXJFZdPf60c"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "media_url",
+              "value": "={{ $('Get Image Url').item.json.url }}"
+            },
+            {
+              "name": "mime_type",
+              "value": "image/jpeg"
+            },
+            {
+              "name": "phone_number",
+              "value": "={{ $('WhatsApp Trigger').item.json.contacts[0].wa_id }}"
+            },
+            {
+              "name": "empresa_id",
+              "value": "3"
+            },
+            {
+              "name": "file_name",
+              "value": "foto_teste_curl"
+            }
+          ]
+        },
+        "options": {
+          "redirect": {
+            "redirect": {}
+          },
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        4288,
+        1472
+      ],
+      "id": "000a821a-4b35-4448-ba42-f7d92274b41b",
+      "name": "HTTP Request",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "786972931173589",
+        "recipientPhoneNumber": "={{ $('WhatsApp Trigger').item.json.contacts[0].wa_id }}",
+        "textBody": "ola",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        3344,
+        2960
+      ],
+      "id": "d37e7674-d67f-49c3-bb04-4251b9ffd359",
+      "name": "Send message2",
+      "webhookId": "f31316fe-6a4a-4393-b273-28675ed66801",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "fX2fGgOTv8l2iRgS",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ctsvfluufyfhkqlonqio.supabase.co/functions/v1/salvar-arquivo-contrato",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0c3ZmbHV1ZnlmaGtxbG9ucWlvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTA3NDAxNywiZXhwIjoyMDY0NjUwMDE3fQ.MKP2txoJjAYEjXFR-5I7Tv-Sw2ldqP2BZXJFZdPf60c"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "empresa_id",
+              "value": "3"
+            },
+            {
+              "name": "media_id",
+              "value": "={{ $('Get File Url').item.json.id }}"
+            },
+            {
+              "name": "file_name",
+              "value": "contrato_assinado.pdf"
+            },
+            {
+              "name": "mime_type",
+              "value": "application/pdf"
+            }
+          ]
+        },
+        "options": {
+          "redirect": {
+            "redirect": {}
+          },
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        4544,
+        1760
+      ],
+      "id": "fc000eec-5afd-42db-ba0a-71eb1840e69a",
+      "name": "HTTP Request1"
+    }
+  ],
+  "pinData": {
+    "Text": [
+      {
+        "json": {
+          "text": "Oi"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "Get Audio Url": [
+      {
+        "json": {
+          "url": "https://lookaside.fbsbx.com/whatsapp_business/attachments/?mid=885929093790709&source=getMedia&ext=1765955518&hash=ARlh8r8HRIRgSGCoOj0yTqspPzHJqLz9QK2rDnHaK92-qA",
+          "mime_type": "audio/ogg",
+          "sha256": "118e597d23be7af18ab0d43d1066ef8cc2442c7ec17b530eddbf06f2bfc5bb7f",
+          "file_size": 6744,
+          "id": "885929093790709",
+          "messaging_product": "whatsapp"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "url": "https://lookaside.fbsbx.com/whatsapp_business/attachments/?mid=885929093790709&source=getMedia&ext=1765955518&hash=ARlh8r8HRIRgSGCoOj0yTqspPzHJqLz9QK2rDnHaK92-qA",
+          "mime_type": "audio/ogg",
+          "sha256": "118e597d23be7af18ab0d43d1066ef8cc2442c7ec17b530eddbf06f2bfc5bb7f",
+          "file_size": 6744,
+          "id": "885929093790709",
+          "messaging_product": "whatsapp"
+        },
+        "pairedItem": {
+          "item": 1
+        }
+      }
+    ],
+    "Transcribe Audio": [
+      {
+        "json": {
+          "text": "Fala, meu amigo, como estão as coisas?",
+          "usage": {
+            "type": "duration",
+            "seconds": 4
+          }
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "text": "Fala, meu amigo, como estão as coisas?",
+          "usage": {
+            "type": "duration",
+            "seconds": 4
+          }
+        },
+        "pairedItem": {
+          "item": 1
+        }
+      }
+    ],
+    "WhatsApp Trigger": [
+      {
+        "json": {
+          "messaging_product": "whatsapp",
+          "metadata": {
+            "display_phone_number": "554861362328",
+            "phone_number_id": "786972931173589"
+          },
+          "contacts": [
+            {
+              "profile": {
+                "name": "Neto"
+              },
+              "wa_id": "554892086968"
+            }
+          ],
+          "messages": [
+            {
+              "from": "554892086968",
+              "id": "wamid.HBgMNTU0ODkyMDg2OTY4FQIAEhgUM0FFNDEyQUFGQzIwRjk0RDdCNzUA",
+              "timestamp": "1766001318",
+              "type": "document",
+              "document": {
+                "filename": "Fatura varanda Oi Abril.pdf",
+                "mime_type": "application/pdf",
+                "sha256": "4SQns2/PqcCjozor4+d4cf12/fNAgMbbN6VtS9WMqUI=",
+                "id": "1413263700808285",
+                "url": "https://lookaside.fbsbx.com/whatsapp_business/attachments/?mid=1413263700808285&source=webhook&ext=1766001619&hash=ARmHvOHpPMTnl2WYKzK-_CXKCtH7ng-BW19qfvCZqCqeeA"
+              }
+            }
+          ],
+          "field": "messages"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "File": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Text": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audio": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Image": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Input type": {
+      "main": [
+        [
+          {
+            "node": "Text",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Audio Url",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Image Url",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Only PDF File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get File Url": {
+      "main": [
+        [
+          {
+            "node": "Download File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Image": {
+      "main": [
+        [
+          {
+            "node": "Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download File": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Audio Url": {
+      "main": [
+        [
+          {
+            "node": "Download Audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Image Url": {
+      "main": [
+        [
+          {
+            "node": "Download Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only PDF File": {
+      "main": [
+        [
+          {
+            "node": "Get File Url",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Incorrect format",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Audio": {
+      "main": [
+        [
+          {
+            "node": "Transcribe Audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Image": {
+      "main": [
+        [
+          {
+            "node": "Analyze Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcribe Audio": {
+      "main": [
+        [
+          {
+            "node": "Audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "From audio to audio?": {
+      "main": [
+        [
+          {
+            "node": "Generate Audio Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Fix mimeType for Audio": {
+      "main": [
+        [
+          {
+            "node": "Send audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Audio Response": {
+      "main": [
+        [
+          {
+            "node": "Fix mimeType for Audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get a row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Busca Contrato",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create a row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a row": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a row": {
+      "main": [
+        [
+          {
+            "node": "Create a conversation1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send message": {
+      "main": [
+        []
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Send message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Message a model1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create a conversation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a conversation": {
+      "main": [
+        [
+          {
+            "node": "Update a row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update a row": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a conversation1": {
+      "main": [
+        [
+          {
+            "node": "cria contrato",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca Contrato": {
+      "main": [
+        [
+          {
+            "node": "Input type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "cria contrato": {
+      "main": [
+        [
+          {
+            "node": "Input type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model1": {
+      "main": [
+        [
+          {
+            "node": "Send message2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "37029868-91e6-4cbc-809c-5d1e9e378037",
+  "meta": {
+    "templateId": "3586",
+    "templateCredsSetupCompleted": true,
+    "instanceId": "4007447a6460e99883c7ee8bccfdba52c2327a0f3f18fef2fd7b45bae7ab97bf"
+  },
+  "id": "b6vUSyYOxD44uPpT",
+  "tags": []
+}

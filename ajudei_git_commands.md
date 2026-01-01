@@ -80,6 +80,11 @@ supabase functions download enviar-link-reserva --project-ref ctsvfluufyfhkqlonq
 supabase functions download orquestrador-conversation --project-ref ctsvfluufyfhkqlonqio
 supabase functions download finalizar-tool-conversation --project-ref ctsvfluufyfhkqlonqio
 supabase functions download webhook-api-wa-me3 --project-ref ctsvfluufyfhkqlonqio
+supabase functions download salvar-arquivo-contrato --project-ref ctsvfluufyfhkqlonqio
+supabase functions download notificar-lead-qualificado --project-ref ctsvfluufyfhkqlonqio
+supabase functions download orquestrador-conversation-dinamic-function --project-ref ctsvfluufyfhkqlonqio
+supabase functions download enviar-lead-qualificado --project-ref ctsvfluufyfhkqlonqio
+
 ```
 
 ---
